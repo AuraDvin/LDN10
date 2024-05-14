@@ -1,14 +1,17 @@
 #!/bin/python3
 import signal
 from datetime import datetime
+import json
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 import socket
 import struct
 import threading
 
+
 IP = "localhost"
-PORT = 1234
+PORT = 1235
+
 ip_family = socket.AF_INET
 HEADER_LENGTH = 2
 FROM_SYSTEM = "FROM:System;"
@@ -59,9 +62,10 @@ def send_from_user(sock_to, message, is_broadcast=False):
 def broadcast_message(from_addr, message, is_system, time):
     global clients, users
     for client in clients:
-        send_message(client[0],
-                     f"@{time} FROM:" + ("System" if is_system else users[from_addr]) + ";"
-                     + message)
+        dict_msg = dict(message=message)
+        dict_msg["user"] = "System" if is_system else users[from_addr]
+        dict_msg["time"] = time
+        send_message(client[0], json.dumps(dict_msg))
 
 # funkcija za komunikacijo z odjemalcem (tece v loceni niti za vsakega odjemalca)
 def client_thread(client_sock, client_addr):
@@ -76,7 +80,7 @@ def client_thread(client_sock, client_addr):
 
     try:
         while True:  # neskoncna zanka
-            msg_received = receive_message(client_sock)
+            msg_received = json.loads(receive_message(client_sock))
             dont_broadcast = False
 
             if not msg_received:  # ce obstaja sporocilo
@@ -86,8 +90,10 @@ def client_thread(client_sock, client_addr):
             # msg_received = msg_received[6:]
             # @16-51 message
 
-            time = msg_received[1:6]
-            msg_received = msg_received[7:]
+
+            time = msg_received["time"]
+            msg_received = msg_received["message"]
+            # user doesn't matter here because we have the IP and port 
 
             if msg_received.startswith("/"):
                 dont_broadcast = not handle_command(msg_received, time, client_sock, client_addr)
@@ -118,40 +124,55 @@ def handle_command(message, time, client_sock, client_addr):
     Handle the message that starts with a "/" -> command
     :return: 0 for a private message (server to 1 client), 1 for public message
     """
+
     server_prefix = "@" + time + FROM_SYSTEM
     global users
+    
     command = message.split(" ")[0][1:]
     args = message.split(" ")[1:]
 
     match command:
         case "nick":
             if not len(args):
-                send_message(client_sock, FROM_SYSTEM + """That's a stupid username! (empty string)
+                
+                send_message(client_sock, json.dumps(dict(
+                    message = """That's a stupid username! (empty string)
                 Try /nick {username}
-                Warning: dont use spaces, max length is 10 characters """ + time)
+                Warning: dont use spaces, max length is 10 characters """,
+                    user = "System",
+                    time = time
+                )))
                 return 0
 
             new_nick = "".join(args)[:MAX_LOGIN_LEN]
 
             if new_nick in users.values():
-                send_message(client_sock, server_prefix + "This username is taken! (try a different one)")
+                send_message(client_sock, json.dumps(dict(
+                    message = "This username is taken! (try a different one)",
+                    user = "System",
+                    time = time)))
                 return 0
 
             if len(new_nick) < 3:
-                send_message(client_sock, server_prefix + "Your new nick is TOO SHORT, minimum 3 characters :)")
+                send_message(client_sock, json.dumps(dict(
+                    message="Your new nick is TOO SHORT, minimum 3 characters :)",
+                    user = "System",
+                    time=time)))
                 return 0
 
             users[client_addr] = new_nick
             send_message(client_sock,
-                         server_prefix + f"_privately_ Nickname changed to {users[client_addr]}")
+                         json.dumps(dict(message=f"_privately_ Nickname changed to {users[client_addr]}", user = "System", time = time)))
             return 0
         # case _:
         #     return 1
         case "w" | "msg" | "whisper" | "dm" | "pm":
             if len(args) < 2:
-                send_message(client_sock, server_prefix + """Who am I sending to and what?
+                send_message(client_sock, json.dumps(dict(message="""Who am I sending to and what?
                 /w <username> <msg>
-                Other names for whisper are whisper, msg and w""")
+                Other names for whisper are whisper, msg and w""",
+                user="System",
+                time=time)))
                 return 0
             other_user = args[0][:MAX_LOGIN_LEN]
             try:
@@ -159,19 +180,29 @@ def handle_command(message, time, client_sock, client_addr):
                 other_client_sock = [client[0] for client in clients if client[1] == other_user_addr][0] or None
                 if client_sock is not None:
                     send_message(other_client_sock,
-                                 "@" + time + "FROM:" + users[client_addr] + ";_privately_ " + " ".join(args[1:]))
-
+                                 json.dumps(dict(
+                                    message="__privately__ " + " ".join(args[1:]),
+                                    user=users[client_addr],
+                                    time=time
+                                 )))
+                    # "@" + time + "FROM:" + users[client_addr] + ";_privately_ " + " ".join(args[1:])
                 return 0
             except Exception:
-                send_message(client_sock, server_prefix + f"""Couldn't find that user {other_user}
+                send_message(client_sock, json.dumps(dict(message=f"""Couldn't find that user {other_user}
                 Check the spelling or contact administrator for support
                 (They may be offline)
-                """)
+                """,
+                user="System",
+                time=time)))
                 return 0
         case _:
-            send_message(client_sock, server_prefix + f"""Unknown command! /{command}
+            send_message(client_sock, json.dumps(dict(
+                message=f"""Unknown command! /{command}
             known commands are: whisper, nick
-            """)
+            """,
+            user="System",
+            time=time
+            )))
             return 1
 
 # kreiraj socket
@@ -183,8 +214,8 @@ server_socket.listen(1)
 # cakaj na nove odjemalce
 print("[system] listening ...")
 clients = set()
-clients_lock = threading.Lock()
 users = dict()
+clients_lock = threading.Lock()
 
 while True:
     try:
