@@ -24,10 +24,13 @@ def setup_SSL_context():
     # certifikat je obvezen
     context.verify_mode = ssl.CERT_REQUIRED
     #nalozi svoje certifikate
-    context.load_cert_chain(certfile=CERTIFIKATI+"server.crt", keyfile=CERTIFIKATI+"privateServer.key")
+    context.load_cert_chain(
+        certfile=CERTIFIKATI + "server.crt", 
+        keyfile=CERTIFIKATI+"privateServer.key"
+        )
     # nalozi certifikate CAjev, ki jim zaupas
     # (samopodp. cert. = svoja CA!)
-    context.load_verify_locations('clients.pem')
+    context.load_verify_locations(CERTIFIKATI + "clients.pem")
     # nastavi SSL CipherSuites (nacin kriptiranja)
     context.set_ciphers('ECDHE-RSA-AES128-GCM-SHA256')
     return context
