@@ -2,6 +2,7 @@
 import signal
 from datetime import datetime
 import json
+import ssl
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 import socket
@@ -11,11 +12,25 @@ import threading
 
 IP = "localhost"
 PORT = 1235
+CERTIFIKATI = "./certificates/"
 
 ip_family = socket.AF_INET
 HEADER_LENGTH = 2
-FROM_SYSTEM = "FROM:System;"
 MAX_LOGIN_LEN = 14
+
+def setup_SSL_context():
+    #uporabi samo TLS, ne SSL
+    context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+    # certifikat je obvezen
+    context.verify_mode = ssl.CERT_REQUIRED
+    #nalozi svoje certifikate
+    context.load_cert_chain(certfile=CERTIFIKATI+"server.crt", keyfile=CERTIFIKATI+"privateServer.key")
+    # nalozi certifikate CAjev, ki jim zaupas
+    # (samopodp. cert. = svoja CA!)
+    context.load_verify_locations('clients.pem')
+    # nastavi SSL CipherSuites (nacin kriptiranja)
+    context.set_ciphers('ECDHE-RSA-AES128-GCM-SHA256')
+    return context
 
 def receive_fixed_length_msg(sock, msglen):
     message = b''
@@ -86,11 +101,6 @@ def client_thread(client_sock, client_addr):
             if not msg_received:  # ce obstaja sporocilo
                 break
 
-            # time = msg_received[:6]
-            # msg_received = msg_received[6:]
-            # @16-51 message
-
-
             time = msg_received["time"]
             msg_received = msg_received["message"]
             # user doesn't matter here because we have the IP and port 
@@ -124,8 +134,6 @@ def handle_command(message, time, client_sock, client_addr):
     Handle the message that starts with a "/" -> command
     :return: 0 for a private message (server to 1 client), 1 for public message
     """
-
-    server_prefix = "@" + time + FROM_SYSTEM
     global users
     
     command = message.split(" ")[0][1:]
@@ -206,10 +214,15 @@ def handle_command(message, time, client_sock, client_addr):
             return 1
 
 # kreiraj socket
-server_socket = socket.socket(ip_family, socket.SOCK_STREAM)
+# server_socket = socket.socket(ip_family, socket.SOCK_STREAM)
 server_addr = (IP, PORT)
-server_socket.bind((IP, PORT))
+my_ssl_ctx = setup_SSL_context()
+server_socket = my_ssl_ctx.wrap_socket(socket.socket(socket.AF_INET, socket.SOCK_STREAM))
+server_socket.bind(server_addr)
 server_socket.listen(1)
+
+
+
 
 # cakaj na nove odjemalce
 print("[system] listening ...")
@@ -221,8 +234,18 @@ while True:
     try:
         # pocakaj na novo povezavo - blokirajoc klic
         client_sock, client_addr = server_socket.accept()
+
+        cert = client_sock.getpeercert()
+        for sub in cert['subject']:
+            for key, value in sub:
+            # v commonName je ime uporabnika
+                if key == 'commonName':
+                    user = value
+        
+        print('Connected by:', client_addr, 'User in cert: ', user)
+        
         with clients_lock:
-            clients.add((client_sock, client_addr))
+            clients.add(client_sock)
 
         thread = threading.Thread(target=client_thread, args=(client_sock, client_addr))
         thread.daemon = True
