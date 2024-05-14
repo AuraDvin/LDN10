@@ -1,7 +1,9 @@
+#!/bin/python3
 import socket
 import struct
 import sys
 import threading
+import json
 from datetime import datetime
 
 PORT = 1234
@@ -36,6 +38,13 @@ def receive_message(your_sock):
     return message
 
 def send_message(your_sock, message):
+ 
+    # This is where I will try replacing the string with a json string
+    # mes_dict = dict(message=message)
+    # mes_dict["time"] = datetime.now()
+    # mes_dict["user"] = zacetni_nick
+    # print(json.dumps(mes_dict))
+ 
     current_time = datetime.now().strftime('@%H-%M ')
     message = current_time + message
     # message = datetime.now().strftime('%H-%M') + " " + message
@@ -84,6 +93,12 @@ while True:
     try:
         msg_send = input()
         if not not len(msg_send):  # ne pošiljaj praznih sporočil
-            send_message(sock, msg_send)
+            
+            mes_dict = dict(message=msg_send)
+            mes_dict["time"] = datetime.now().strftime("%H-%M")
+            mes_dict["user"] = zacetni_nick
+            print(json.dumps(mes_dict))
+
+            # send_message(sock, msg_send)
     except KeyboardInterrupt:
         sys.exit()

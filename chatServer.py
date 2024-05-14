@@ -1,3 +1,4 @@
+#!/bin/python3
 import signal
 from datetime import datetime
 
