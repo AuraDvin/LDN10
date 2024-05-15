@@ -93,7 +93,7 @@ def broadcast_message(from_addr, message, is_system, time):
         dict_msg = dict(message=message)
         dict_msg["user"] = "System" if is_system else users[from_addr]
         dict_msg["time"] = time
-        send_message(client[0], json.dumps(dict_msg))
+        send_message(client, json.dumps(dict_msg))
 
 
 # funkcija za komunikacijo z odjemalcem (tece v loceni niti za vsakega odjemalca)
@@ -325,6 +325,7 @@ while True:
                 # v commonName je ime uporabnika
                 if key == "commonName":
                     user = value
+                    users[client_addr] = user  # začetno uporabniško ime iz commonName-a
 
         print("Connected by:", client_addr, "User in cert: ", user)
 

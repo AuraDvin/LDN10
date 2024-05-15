@@ -12,15 +12,35 @@ SERVER_IP = "localhost"
 ip_family = socket.AF_INET
 HEADER_LENGTH = 2
 
+CERTIFIKATI = "./certificates/"
+
+
+def setup_SSL_context():
+    # uporabi samo TLS, ne SSL
+    context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+    # certifikat je obvezen
+    context.verify_mode = ssl.CERT_REQUIRED
+    # nalozi svoje certifikate
+    context.load_cert_chain(
+        certfile=CERTIFIKATI + "janez.crt", keyfile=CERTIFIKATI + "privateJanez.key"
+    )
+    # nalozi certifikate CAjev (samopodp. cert.= svoja CA!)
+    context.load_verify_locations(CERTIFIKATI + "server.crt")
+    # nastavi SSL CipherSuites (nacin kriptiranja)
+    context.set_ciphers("ECDHE-RSA-AES128-GCM-SHA256")
+    return context
+
+
 def receive_fixed_length_msg(user_sock, msglen):
-    message = b''
+    message = b""
     while len(message) < msglen:
         chunk = user_sock.recv(msglen - len(message))  # preberi nekaj bajtov
-        if chunk == b'':
+        if chunk == b"":
             raise RuntimeError("socket connection broken")
         message = message + chunk  # pripni prebrane bajte sporocilu
 
     return message
+
 
 def receive_message(your_sock):
     # preberi glavo sporocila (v prvih 2 bytih je dolzina sporocila)
@@ -33,19 +53,22 @@ def receive_message(your_sock):
     if message_length > 0:  # ce je vse OK
         # print(f"Message recieved! message length: {message_length}\n")
         # print(struct.unpack("!H", header))
-        message = receive_fixed_length_msg(your_sock, message_length)  # preberi sporocilo
+        message = receive_fixed_length_msg(
+            your_sock, message_length
+        )  # preberi sporocilo
         message = message.decode("utf-8")
 
     return json.loads(message)
 
+
 def send_message(your_sock, message):
- 
+
     # This is where I will try replacing the string with a json string
-    current_time = datetime.now().strftime('@%H-%M ')
-    
+    current_time = datetime.now().strftime("@%H-%M ")
+
     mes_dict = dict(message=message)
     mes_dict["time"] = current_time
-    mes_dict["user"] = zacetni_nick
+    mes_dict["user"] = ""
     print(json.dumps(mes_dict))
 
     message = json.dumps(mes_dict)
@@ -53,14 +76,19 @@ def send_message(your_sock, message):
     # message = current_time + message
     # message = datetime.now().strftime('%H-%M') + " " + message
 
-    encoded_message = message.encode("utf-8")  # pretvori sporocilo v niz bajtov, uporabi UTF-8 kodno tabelo
+    encoded_message = message.encode(
+        "utf-8"
+    )  # pretvori sporocilo v niz bajtov, uporabi UTF-8 kodno tabelo
 
     # ustvari glavo v prvih 2 bytih je dolzina sporocila (HEADER_LENGTH)
     # metoda pack "!H" : !=network byte order, H=unsigned short
     header = struct.pack("!H", len(encoded_message))
 
-    message = header + encoded_message  # najprj posljemo dolzino sporocilo, slee nato sporocilo samo
+    message = (
+        header + encoded_message
+    )  # najprj posljemo dolzino sporocilo, slee nato sporocilo samo
     your_sock.sendall(message)
+
 
 # message_receiver funkcija tece v loceni niti
 def message_receiver():
@@ -79,19 +107,20 @@ def message_receiver():
         msg_time = msg_received["time"]
         msg_actual = msg_received["message"]
 
-
         if len(msg_received) > 0:  # ce obstaja sporocilo
             print(msg_time + " <" + msg_from + ">: " + msg_actual)
             # print(msg_from + msg_actual)  # izpisi
 
+
 # povezi se na streznik
 print("[system] connecting to chat server ...")
-sock = socket.socket(ip_family, socket.SOCK_STREAM)
+my_ssl_ctx = setup_SSL_context()
+sock = my_ssl_ctx.wrap_socket(socket.socket(socket.AF_INET, socket.SOCK_STREAM))
 sock.connect((SERVER_IP, PORT))
 print("[system] connected!")
 
-zacetni_nick = input("Vpisi uporabnisko ime: ")
-send_message(sock, "/nick " + zacetni_nick)  # serverju pošlje ime
+# zacetni_nick = input("Vpisi uporabnisko ime: ")
+# send_message(sock, "/nick " + zacetni_nick)  # serverju pošlje ime
 
 # zazeni message_receiver funkcijo v loceni niti
 thread = threading.Thread(target=message_receiver)
@@ -103,12 +132,10 @@ while True:
     try:
         msg_send = input()
         if not not len(msg_send):  # ne pošiljaj praznih sporočil
-            
+
             mes_dict = dict(message=msg_send)
             mes_dict["time"] = datetime.now().strftime("%H-%M")
-            mes_dict["user"] = zacetni_nick
-            print(json.dumps(mes_dict))
-
-            send_message(sock, msg_send)
+            mes_dict["user"] = ""
+            send_message(sock, json.dumps(mes_dict))
     except KeyboardInterrupt:
         sys.exit()
