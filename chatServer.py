@@ -10,9 +10,10 @@ import threading
 
 IP = "localhost"
 PORT = 1234
-SERVER_CRT = "certificates/server.crt"
-SERVER_KEY = "certificates/privateServer.key"
-CLIENTS_PEM = "certificates/clients.pem"
+CERTIFIKATI = "certificates/"
+SERVER_CRT = CERTIFIKATI + "server.crt"
+SERVER_KEY = CERTIFIKATI + "privateServer.key"
+CLIENTS_PEM = CERTIFIKATI + "clients.pem"
 
 ip_family = socket.AF_INET
 HEADER_LENGTH = 2
@@ -59,9 +60,8 @@ def receive_message(sock):
     return message
 
 def send_message(sock, message):
-    encoded_message = message.encode(
-        "utf-8"
-    )  # pretvori sporocilo v niz bajtov, uporabi UTF-8 kodno tabelo
+    encoded_message = message.encode("utf-8")
+    # pretvori sporocilo v niz bajtov, uporabi UTF-8 kodno tabelo
 
     # ustvari glavo v prvih 2 bytih je dolzina sporocila (HEADER_LENGTH)
     # metoda pack "!H" : !=network byte order, H=unsigned short
@@ -71,16 +71,6 @@ def send_message(sock, message):
             header + encoded_message
     )  # najprj posljemo dolzino sporocilo, slee nato sporocilo samo
     sock.sendall(message)
-
-# def send_from_user(sock_to, message, is_broadcast=False):
-#     global clients, users
-#     msg_prefix = "FROM: " + users[client_addr] + datetime.now().strftime("@%H-%M ")
-#     message = msg_prefix + message
-#     if is_broadcast:
-#         for client in clients:
-#             send_message(client[0], message)
-#         return
-#     send_message(sock_to, message)
 
 def broadcast_message(from_addr, message, is_system, time):
     global clients, users
@@ -92,14 +82,11 @@ def broadcast_message(from_addr, message, is_system, time):
 
 # funkcija za komunikacijo z odjemalcem (tece v loceni niti za vsakega odjemalca)
 def client_thread(client_sock, client_addr):
-    global clients
+    global clients, users
 
     print("[system] connected with " + client_addr[0] + ":" + str(client_addr[1]))
     print("[system] we now have " + str(len(clients)) + " clients")
-
-    # if client_addr not in users:
-    #     users[client_addr] = "user_" + str(len(clients) - 1)
-    #     print(f"No username found, you're {users[client_addr]} now :D")
+    print("[system] Welcome " + str(users[client_addr]))
 
     try:
         while True:  # neskoncna zanka
@@ -117,17 +104,10 @@ def client_thread(client_sock, client_addr):
                     msg_actual, time, client_sock, client_addr
                 )
 
-            print(
-                time
-                + " ["
-                + users[client_addr]
-                + ", "
-                + client_addr[0]
-                + ":"
-                + str(client_addr[1])
-                + "] : "
-                + msg_actual
-            )
+            print(time +
+                  " [" + users[client_addr] + ", " + client_addr[0] + ":" + str(client_addr[1])
+                  + "] : " + msg_actual
+                  )
 
             if dont_broadcast:
                 continue
@@ -241,11 +221,7 @@ def handle_command(message, time, this_client_sock, this_client_addr):
                     addr for (addr, nick) in users.items() if nick == other_user
                 ][0]
 
-                print("other user key ", other_user_test_addr)
-
                 other_client_sock = [client[0] for client in clients if client[1] == other_user_test_addr][0]
-
-                print("other client sock", other_client_sock)
 
                 if this_client_sock is not None:
                     send_message(
@@ -319,7 +295,7 @@ while True:
                     user = value
                     users[client_addr] = user  # začetno uporabniško ime iz commonName-a
 
-        print("Connected by:", client_addr, "User in cert: ", user)
+        print("Connected by:", client_addr)
 
         with clients_lock:
             clients.add((client_sock, client_addr))
