@@ -6,14 +6,15 @@ import json
 import ssl
 from datetime import datetime
 
-PORT = 1235
+PORT = 1234
 SERVER_IP = "localhost"
 ip_family = socket.AF_INET
 HEADER_LENGTH = 2
 
 CERTIFIKATI = "certificates/"
-IME = "janez"
+SERVER_KEY = CERTIFIKATI + "server.crt"
 private_key = "privateJanez"
+IME = "janez"
 
 def init():
     global IME, private_key
@@ -43,7 +44,7 @@ def setup_SSL_context():
         keyfile=CERTIFIKATI + private_key
     )
     # nalozi certifikate CAjev (samopodp. cert.= svoja CA!)
-    context.load_verify_locations(CERTIFIKATI + "server.crt")
+    context.load_verify_locations(SERVER_KEY)
     # nastavi SSL CipherSuites (nacin kriptiranja)
     context.set_ciphers("ECDHE-RSA-AES128-GCM-SHA256")
     return context
