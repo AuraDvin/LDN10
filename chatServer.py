@@ -8,15 +8,15 @@ import socket
 import struct
 import threading
 
-
 IP = "localhost"
 PORT = 1235
-CERTIFIKATI = "./certificates/"
+SERVER_CRT = "certificates/server.crt"
+SERVER_KEY = "certificates/privateServer.key"
+CLIENTS_PEM = "certificates/clients.pem"
 
 ip_family = socket.AF_INET
 HEADER_LENGTH = 2
 MAX_LOGIN_LEN = 14
-
 
 def setup_SSL_context():
     # uporabi samo TLS, ne SSL
@@ -25,16 +25,15 @@ def setup_SSL_context():
     context.verify_mode = ssl.CERT_REQUIRED
     # nalozi svoje certifikate
     context.load_cert_chain(
-        certfile="C:/LDN10/LDN10/certificates/server.crt", 
-        keyfile="C:/LDN10/LDN10/certificates/privateServer.key"
+        certfile=SERVER_CRT,
+        keyfile=SERVER_KEY
     )
     # nalozi certifikate CAjev, ki jim zaupas
     # (samopodp. cert. = svoja CA!)
-    context.load_verify_locations("C:/LDN10/LDN10/certificates/clients.pem")
+    context.load_verify_locations(CLIENTS_PEM)
     # nastavi SSL CipherSuites (nacin kriptiranja)
     context.set_ciphers("ECDHE-RSA-AES128-GCM-SHA256")
     return context
-
 
 def receive_fixed_length_msg(sock, msglen):
     message = b""
@@ -42,10 +41,9 @@ def receive_fixed_length_msg(sock, msglen):
         chunk = sock.recv(msglen - len(message))  # preberi nekaj bajtov
         if chunk == b"":
             raise RuntimeError("socket connection broken")
-        message = message + chunk  # pripni prebrane bajte sporocilu
+        message = message + chunk
 
     return message
-
 
 def receive_message(sock):
     header = receive_fixed_length_msg(
@@ -60,7 +58,6 @@ def receive_message(sock):
 
     return message
 
-
 def send_message(sock, message):
     encoded_message = message.encode(
         "utf-8"
@@ -71,10 +68,9 @@ def send_message(sock, message):
     header = struct.pack("!H", len(encoded_message))
 
     message = (
-        header + encoded_message
+            header + encoded_message
     )  # najprj posljemo dolzino sporocilo, slee nato sporocilo samo
     sock.sendall(message)
-
 
 def send_from_user(sock_to, message, is_broadcast=False):
     global clients, users
@@ -86,7 +82,6 @@ def send_from_user(sock_to, message, is_broadcast=False):
         return
     send_message(sock_to, message)
 
-
 def broadcast_message(from_addr, message, is_system, time):
     global clients, users
     for client in clients:
@@ -94,7 +89,6 @@ def broadcast_message(from_addr, message, is_system, time):
         dict_msg["user"] = "System" if is_system else users[from_addr]
         dict_msg["time"] = time
         send_message(client, json.dumps(dict_msg))
-
 
 # funkcija za komunikacijo z odjemalcem (tece v loceni niti za vsakega odjemalca)
 def client_thread(client_sock, client_addr):
@@ -122,7 +116,6 @@ def client_thread(client_sock, client_addr):
                 dont_broadcast = not handle_command(
                     msg_actual, time, client_sock, client_addr
                 )
-            
 
             print(
                 time
@@ -143,17 +136,16 @@ def client_thread(client_sock, client_addr):
             broadcast_message(client_addr, msg_actual, False, time)
 
     # # prisli smo iz neskoncne zanke
-            
+
     except ConnectionResetError:
         print(users[client_addr] + " is gone")
         del users[client_addr]
         pass
-    except RuntimeError: 
+    except RuntimeError:
         print("some user is gone")
         pass
     with clients_lock:
         clients.remove(client_sock)
-
 
     print(
         datetime.now().strftime("@%H:%M ")
@@ -162,7 +154,6 @@ def client_thread(client_sock, client_addr):
         + " clients"
     )
     client_sock.close()
-
 
 def handle_command(message, time, client_sock, client_addr):
     """
@@ -177,7 +168,6 @@ def handle_command(message, time, client_sock, client_addr):
     match command:
         case "nick":
             if not len(args):
-
                 send_message(
                     client_sock,
                     json.dumps(
@@ -256,11 +246,10 @@ def handle_command(message, time, client_sock, client_addr):
                 ]
                 print("other user key " + other_user_addr)
                 other_client_sock = [
-                    client[0] for client in clients if client[1] == other_user_addr
-                ][0] or None
+                                        client[0] for client in clients if client[1] == other_user_addr
+                                    ][0] or None
                 print("other client sock" + other_client_sock)
                 if client_sock is not None:
-                    
                     send_message(
                         other_client_sock,
                         json.dumps(
@@ -304,7 +293,6 @@ def handle_command(message, time, client_sock, client_addr):
             )
             return 1
 
-
 # kreiraj socket
 # server_socket = socket.socket(ip_family, socket.SOCK_STREAM)
 server_addr = (IP, PORT)
@@ -314,7 +302,6 @@ server_socket = my_ssl_ctx.wrap_socket(
 )
 server_socket.bind(server_addr)
 server_socket.listen(1)
-
 
 # cakaj na nove odjemalce
 print("[system] listening ...")
