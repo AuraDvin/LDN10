@@ -1,4 +1,4 @@
-#!/bin/python3
+
 import socket
 import struct
 import sys
@@ -13,7 +13,8 @@ ip_family = socket.AF_INET
 HEADER_LENGTH = 2
 
 CERTIFIKATI = "./certificates/"
-
+IME = "janez"
+private_key = "privateJanez"
 
 def setup_SSL_context():
     # uporabi samo TLS, ne SSL
@@ -22,10 +23,11 @@ def setup_SSL_context():
     context.verify_mode = ssl.CERT_REQUIRED
     # nalozi svoje certifikate
     context.load_cert_chain(
-        certfile=CERTIFIKATI + "janez.crt", keyfile=CERTIFIKATI + "privateJanez.key"
+        certfile=CERTIFIKATI + IME + ".crt", 
+        keyfile=CERTIFIKATI + private_key + ".key"
     )
     # nalozi certifikate CAjev (samopodp. cert.= svoja CA!)
-    context.load_verify_locations(CERTIFIKATI + "server.crt")
+    context.load_verify_locations(CERTIFIKATI+"server.crt")
     # nastavi SSL CipherSuites (nacin kriptiranja)
     context.set_ciphers("ECDHE-RSA-AES128-GCM-SHA256")
     return context
@@ -69,7 +71,7 @@ def send_message(your_sock, message):
     mes_dict = dict(message=message)
     mes_dict["time"] = current_time
     mes_dict["user"] = ""
-    print(json.dumps(mes_dict))
+    # print(json.dumps(mes_dict))
 
     message = json.dumps(mes_dict)
 
@@ -102,10 +104,16 @@ def message_receiver():
 
         # msg_from = msg_time + " [" + user_from + "]: "
         # msg_actual = msg_received[msg_received.find(";") + 1:]
+        
+        # print("raw: ", end="")
+        # print(msg_received)
+
 
         msg_from = msg_received["user"]
         msg_time = msg_received["time"]
         msg_actual = msg_received["message"]
+        # print("actual: ", end="")
+        # print(msg_actual)
 
         if len(msg_received) > 0:  # ce obstaja sporocilo
             print(msg_time + " <" + msg_from + ">: " + msg_actual)
@@ -132,10 +140,6 @@ while True:
     try:
         msg_send = input()
         if not not len(msg_send):  # ne pošiljaj praznih sporočil
-
-            mes_dict = dict(message=msg_send)
-            mes_dict["time"] = datetime.now().strftime("%H-%M")
-            mes_dict["user"] = ""
-            send_message(sock, json.dumps(mes_dict))
+            send_message(sock, msg_send)
     except KeyboardInterrupt:
         sys.exit()

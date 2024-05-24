@@ -1,4 +1,3 @@
-#!/bin/python3
 import signal
 from datetime import datetime
 import json
@@ -26,11 +25,12 @@ def setup_SSL_context():
     context.verify_mode = ssl.CERT_REQUIRED
     # nalozi svoje certifikate
     context.load_cert_chain(
-        certfile=CERTIFIKATI + "server.crt", keyfile=CERTIFIKATI + "privateServer.key"
+        certfile="C:/LDN10/LDN10/certificates/server.crt", 
+        keyfile="C:/LDN10/LDN10/certificates/privateServer.key"
     )
     # nalozi certifikate CAjev, ki jim zaupas
     # (samopodp. cert. = svoja CA!)
-    context.load_verify_locations(CERTIFIKATI + "clients.pem")
+    context.load_verify_locations("C:/LDN10/LDN10/certificates/clients.pem")
     # nastavi SSL CipherSuites (nacin kriptiranja)
     context.set_ciphers("ECDHE-RSA-AES128-GCM-SHA256")
     return context
@@ -103,9 +103,9 @@ def client_thread(client_sock, client_addr):
     print("[system] connected with " + client_addr[0] + ":" + str(client_addr[1]))
     print("[system] we now have " + str(len(clients)) + " clients")
 
-    if client_addr not in users:
-        users[client_addr] = "user_" + str(len(clients) - 1)
-        print(f"No username found, you're {users[client_addr]} now :D")
+    # if client_addr not in users:
+    #     users[client_addr] = "user_" + str(len(clients) - 1)
+    #     print(f"No username found, you're {users[client_addr]} now :D")
 
     try:
         while True:  # neskoncna zanka
@@ -116,13 +116,13 @@ def client_thread(client_sock, client_addr):
                 break
 
             time = msg_received["time"]
-            msg_received = msg_received["message"]
-            # user doesn't matter here because we have the IP and port
+            msg_actual = msg_received["message"]
 
-            if msg_received.startswith("/"):
+            if msg_actual.startswith("/"):
                 dont_broadcast = not handle_command(
-                    msg_received, time, client_sock, client_addr
+                    msg_actual, time, client_sock, client_addr
                 )
+            
 
             print(
                 time
@@ -133,23 +133,27 @@ def client_thread(client_sock, client_addr):
                 + ":"
                 + str(client_addr[1])
                 + "] : "
-                + msg_received
+                + msg_actual
             )
 
             if dont_broadcast:
                 continue
 
             # send_from_user(client_sock, None, msg_received, True)
-            broadcast_message(client_addr, msg_received, False, time)
+            broadcast_message(client_addr, msg_actual, False, time)
 
+    # # prisli smo iz neskoncne zanke
+            
     except ConnectionResetError:
         print(users[client_addr] + " is gone")
         del users[client_addr]
         pass
-
-    # prisli smo iz neskoncne zanke
+    except RuntimeError: 
+        print("some user is gone")
+        pass
     with clients_lock:
-        clients.remove((client_sock, client_addr))
+        clients.remove(client_sock)
+
 
     print(
         datetime.now().strftime("@%H:%M ")
@@ -250,10 +254,13 @@ def handle_command(message, time, client_sock, client_addr):
                 other_user_addr = list(users.keys())[
                     list(users.values()).index(other_user)
                 ]
+                print("other user key " + other_user_addr)
                 other_client_sock = [
                     client[0] for client in clients if client[1] == other_user_addr
                 ][0] or None
+                print("other client sock" + other_client_sock)
                 if client_sock is not None:
+                    
                     send_message(
                         other_client_sock,
                         json.dumps(
@@ -280,6 +287,7 @@ def handle_command(message, time, client_sock, client_addr):
                         )
                     ),
                 )
+                print(users)
                 return 0
         case _:
             send_message(
